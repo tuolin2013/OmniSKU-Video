@@ -98,6 +98,39 @@ if [[ "$DO_TOOLS" == "true" ]]; then
         log "uv 已存在: $(uv --version)"
     fi
 
+    # ── HuggingFace 缓存路径统一（防止配额问题）────────────
+    # RunPod 对 /workspace/.cache 有时有额外配额限制
+    # 统一用 /workspace/huggingface_cache，并建软链接兼容两种路径
+    mkdir -p /workspace/huggingface_cache/hub /workspace/huggingface_cache/xet
+    if [[ ! -L /workspace/.cache/huggingface ]]; then
+        mkdir -p /workspace/.cache
+        if [[ -d /workspace/.cache/huggingface && ! -L /workspace/.cache/huggingface ]]; then
+            # 迁移已有内容
+            for d in /workspace/.cache/huggingface/hub/*/; do
+                [[ -d "$d" ]] || continue
+                name=$(basename "$d")
+                if [[ ! -d "/workspace/huggingface_cache/hub/$name" ]]; then
+                    mv "$d" "/workspace/huggingface_cache/hub/$name"
+                    log "迁移模型缓存: $name"
+                fi
+            done
+            rm -rf /workspace/.cache/huggingface
+        fi
+        ln -s /workspace/huggingface_cache /workspace/.cache/huggingface
+        log "HF 缓存软链接已创建: .cache/huggingface -> huggingface_cache"
+    else
+        log "HF 缓存软链接已存在"
+    fi
+    # 写入 ~/.bashrc 永久生效
+    grep -q "HF_HOME" /root/.bashrc 2>/dev/null || cat >> /root/.bashrc << 'BASHEOF'
+export HF_HOME="/workspace/huggingface_cache"
+export HF_HUB_CACHE="/workspace/huggingface_cache/hub"
+export HF_XET_CACHE="/workspace/huggingface_cache/xet"
+BASHEOF
+    export HF_HOME="/workspace/huggingface_cache"
+    export HF_HUB_CACHE="/workspace/huggingface_cache/hub"
+    export HF_XET_CACHE="/workspace/huggingface_cache/xet"
+
     # ── Redis 启动 ───────────────────────────────────────
     if ! redis-cli ping &>/dev/null 2>&1; then
         log "启动 Redis..."
