@@ -48,6 +48,17 @@ class Settings(BaseSettings):
     # LTX-Video 预览模型额外占用约 4GB RAM，默认关闭，按需开启
     LOAD_LTX_PREVIEW: bool = False
 
+    # ── LLM / Agent API（提示词增强 Skill）──────────────────────────
+    # 调用 LLM 将简短分镜描述增强为结构化 Wan 专业提示词
+    RIGHT_CODE_API_KEY: str = ""
+    TEXT_CHAT_URL: str = "https://right.codes/codex/v1/chat/completions"
+    CODEX_BASE_URL: str = "https://right.codes/codex/v1"
+    GEMINI_BASE_URL: str = "https://right.codes/gemini/v1"
+    # 是否在提交分镜脚本时自动调用 LLM 增强提示词（可通过 .env 关闭）
+    ENABLE_PROMPT_ENHANCEMENT: bool = True
+    # 提示词增强最大并发数（防止 LLM API 限流）
+    PROMPT_ENHANCE_CONCURRENCY: int = 5
+
     # ── Redis / Celery 任务队列 ────────────────────────────────────
     REDIS_URL: str = "redis://localhost:6379/0"
 

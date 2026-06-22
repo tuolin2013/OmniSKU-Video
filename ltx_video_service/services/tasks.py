@@ -69,22 +69,33 @@ def _make_celery() -> Celery:
 celery_app = _make_celery()
 
 
-# ── Worker 进程初始化：加载模型 ────────────────────────────────────────────
-# Celery worker 是独立 fork 进程，FastAPI 主进程加载的 _state（pipeline）不会继承。
-# 直接在模块顶层注册 worker_process_init 信号，每个 worker 子进程启动后立即加载模型。
+# ── Worker 懒加载模型 ──────────────────────────────────────────────────────
+# 不在 worker_process_init 中加载模型！
+#
+# 原因：worker_process_init 信号在 billiard 等待 UP 握手消息之前触发，
+# 而 Wan 2.2 A14B 加载需要 ~3min，billiard 默认只等待 ~2s 就 SIGKILL 新进程，
+# 导致 Celery 陷入"启动 → 超时 → SIGKILL → 再次启动"的无限死循环。
+#
+# 解决方案：worker 进程先正常发送 UP 消息（不阻塞），第一个任务到来时才加载模型。
+# _worker_models_loaded 标志保证每个 worker 进程只加载一次。
 
-from celery.signals import worker_process_init
+_worker_models_loaded: bool = False
 
-@worker_process_init.connect
-def _load_models_in_worker(**kwargs):
-    import asyncio
+
+def _ensure_models_loaded() -> None:
+    """懒加载：第一次被任务调用时加载模型，之后直接返回。"""
+    global _worker_models_loaded
+    if _worker_models_loaded:
+        return
     from services.engine import load_model
-    logger.info("Celery worker 进程初始化：开始加载模型...")
+    logger.info("Celery worker 首次推理：开始加载模型（懒加载）...")
     try:
         asyncio.run(load_model())
+        _worker_models_loaded = True
         logger.info("Celery worker 模型加载完成")
     except Exception as e:
         logger.opt(exception=True).error("Celery worker 模型加载失败: {}", e)
+        raise  # 加载失败时让任务失败，而非继续用空模型
 
 
 # ── 任务状态常量 ───────────────────────────────────────────────────────────
@@ -120,6 +131,9 @@ def generate_shot_task(self, shot_spec_dict: Dict[str, Any]) -> Dict[str, Any]:
     import asyncio
     from services.engine import ShotSpec, generate_shot
 
+    # 懒加载模型（第一次调用时加载，之后直接返回）
+    _ensure_models_loaded()
+
     # 更新任务状态为 processing
     self.update_state(state="PROGRESS", meta={"status": TaskStatus.PROCESSING, "progress": 0})
     logger.info("任务 {} 开始推理 | shot={}", self.request.id, shot_spec_dict.get("prompt", "")[:60])
@@ -147,6 +161,9 @@ def generate_shot_task(self, shot_spec_dict: Dict[str, Any]) -> Dict[str, Any]:
     bind=True,
     max_retries=1,
     default_retry_delay=10,
+    # 分镜脚本任务最多包含多个分镜，每镜最长 15min，整体给 2h 软限制 / 2h10min 硬限制
+    soft_time_limit=7200,   # 2h  — 超时后抛 SoftTimeLimitExceeded，可做清理
+    time_limit=7800,        # 2h10min — 硬限制，兜底防止 worker 僵死
 )
 def generate_storyboard_task(self, shot_spec_dicts: list) -> Dict[str, Any]:
     """
@@ -162,6 +179,9 @@ def generate_storyboard_task(self, shot_spec_dicts: list) -> Dict[str, Any]:
     """
     import asyncio
     from services.engine import ShotSpec, generate_shot
+
+    # 懒加载模型（第一次调用时加载，之后直接返回）
+    _ensure_models_loaded()
 
     total = len(shot_spec_dicts)
     self.update_state(

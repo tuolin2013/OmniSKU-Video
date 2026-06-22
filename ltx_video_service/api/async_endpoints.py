@@ -24,6 +24,8 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 from api.endpoints import ShotRequest, StoryboardRequest
+from core.config import get_settings
+from services.prompt_enhancer import enhance_storyboard_prompts
 from services.tasks import TaskStatus, celery_app, generate_shot_task, generate_storyboard_task, get_task_status
 
 async_router = APIRouter()
@@ -112,8 +114,30 @@ async def submit_generate_async(request: ShotRequest) -> TaskSubmitResponse:
 async def submit_storyboard_async(request: StoryboardRequest) -> TaskSubmitResponse:
     """提交分镜脚本批量异步生成任务"""
     shot_count = len(request.shots)
+    settings = get_settings()
+
+    # ── 提示词增强（可通过 ENABLE_PROMPT_ENHANCEMENT=false 全局关闭）────
+    if settings.ENABLE_PROMPT_ENHANCEMENT and settings.RIGHT_CODE_API_KEY:
+        original_prompts = [shot.prompt for shot in request.shots]
+        context = getattr(request, "context", None)  # StoryboardRequest 可选 context 字段
+        logger.info("开始 LLM 提示词增强，共 {} 个分镜", shot_count)
+        enhanced_prompts = await enhance_storyboard_prompts(
+            original_prompts,
+            context=context,
+            max_concurrent=settings.PROMPT_ENHANCE_CONCURRENCY,
+        )
+        # 用增强后的 prompt 替换原始 prompt（就地修改副本，不影响原始请求对象）
+        shots_with_enhanced = []
+        for shot, new_prompt in zip(request.shots, enhanced_prompts):
+            shot_copy = shot.model_copy(update={"prompt": new_prompt})
+            shots_with_enhanced.append(shot_copy)
+        shots = shots_with_enhanced
+        logger.info("提示词增强完成")
+    else:
+        shots = request.shots
+
     spec_dicts = []
-    for shot in request.shots:
+    for shot in shots:
         spec = shot.to_shot_spec()
         spec_dicts.append({
             "prompt":                spec.prompt,
