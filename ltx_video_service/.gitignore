@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# 环境变量（含密钥，不入库）
+.env
+
+# 生成的视频输出（临时文件）
+outputs/
+
+# 日志
+logs/
+
+# 临时测试脚本
+_test_pipelines.py
+_inspect_params.py

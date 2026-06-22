@@ -1,0 +1,35 @@
+# ── Web 框架核心 ──────────────────────────────────────────────────────────
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+pydantic==2.7.4
+pydantic-settings==2.3.4
+
+# ── AI 推理引擎 ───────────────────────────────────────────────────────────
+# torch 在此环境已预装 (2.8.0+cu128)，无需重复安装
+# torch==2.3.1
+diffusers>=0.33.0          # WanPipeline/WanImageToVideoPipeline 在 0.33+ 引入
+transformers>=4.51.0
+accelerate==0.31.0
+sentencepiece==0.2.0
+tiktoken
+protobuf
+
+# ── 图像处理 ──────────────────────────────────────────────────────────────
+Pillow>=10.0.0
+rembg>=2.0.50              # 商品图自动抠图（u2net 模型）
+onnxruntime>=1.17.0        # rembg 依赖（CPU 推理后端），缺失会导致 rembg 直接 sys.exit(1)
+opencv-python>=4.8.0       # Real-ESRGAN 视频超分所需（BGR/RGB 转换）
+
+# ── 视频超分（Real-ESRGAN）────────────────────────────────────────────────
+basicsr>=1.4.2             # Real-ESRGAN 依赖的基础超分框架
+realesrgan>=0.3.0          # Real-ESRGAN x2plus，视频帧 2x 超分
+
+# ── 视频导出 ──────────────────────────────────────────────────────────────
+imageio[ffmpeg]==2.34.2
+
+# ── 异步任务队列（Celery + Redis）────────────────────────────────────────
+celery>=5.3.0              # 异步任务队列，GPU 任务串行化
+redis>=4.6.0               # Celery broker + backend
+
+# ── 日志 ──────────────────────────────────────────────────────────────────
+loguru==0.7.2

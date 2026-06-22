@@ -1,0 +1,5 @@
+两个项目的启动命令：
+
+**ltx_video_service**：`cd /workspace/ltx_video_service && python main.py`，服务跑在 `localhost:8000`。
+
+**OmniVoice-Studio**：后端 `uv run python backend/main.py`，前端 `bun run dev`；也可以用 `docker compose -f deploy/docker-compose.yml up` 一键启动。
