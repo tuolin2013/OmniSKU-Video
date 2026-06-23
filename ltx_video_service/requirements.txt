@@ -7,8 +7,15 @@ pydantic-settings==2.3.4
 # ── AI 推理引擎 ───────────────────────────────────────────────────────────
 # torch 在此环境已预装 (2.8.0+cu128)，无需重复安装
 # torch==2.3.1
-diffusers>=0.33.0          # WanPipeline/WanImageToVideoPipeline 在 0.33+ 引入
-transformers>=4.51.0
+# diffusers 0.33+ 引入 WanPipeline/WanImageToVideoPipeline
+# diffusers 0.36+ 引入 attention_dispatch.py，依赖 torch 2.5+ 的 @_custom_op API，
+# 与当前环境 torch 2.4.1 不兼容，锁定 0.35.x
+diffusers==0.35.2
+# transformers 5.x 移除了 FLAX_WEIGHTS_NAME 等符号，导致 diffusers 0.34 以下导入失败；
+# 锁定 4.x 以兼容 diffusers 0.35.2
+transformers>=4.51.0,<5.0.0
+
+
 accelerate==0.31.0
 sentencepiece==0.2.0
 tiktoken
